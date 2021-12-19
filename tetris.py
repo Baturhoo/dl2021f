@@ -1,330 +1,279 @@
-#!/usr/bin/env python3
-#-*- coding: utf-8 -*-
+"""
+@author: Viet Nguyen <nhviet1009@gmail.com>
+"""
+import numpy as np
+from PIL import Image
+import cv2
+from matplotlib import style
+import torch
+import random
 
-# Very simple tetris implementation
-#
-# Control keys:
-#       Down - Drop stone faster
-# Left/Right - Move stone
-#         Up - Rotate Stone clockwise
-#     Escape - Quit game
-#          P - Pause game
-#     Return - Instant drop
-#
-# Have fun!
+style.use("ggplot")
 
-# NOTE: If you're looking for the old python2 version, see
-#       <https://gist.github.com/silvasur/565419/45a3ded61b993d1dd195a8a8688e7dc196b08de8>
 
-# Copyright (c) 2010 "Laria Carolin Chabowski"<me@laria.me>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-
-from random import randrange as rand
-import pygame, sys
-
-# The configuration
-cell_size = 18
-cols =      10
-rows =      22
-maxfps =    30
-
-colors = [
-(0,   0,   0  ),
-(255, 85,  85),
-(100, 200, 115),
-(120, 108, 245),
-(255, 140, 50 ),
-(50,  120, 52 ),
-(146, 202, 73 ),
-(150, 161, 218 ),
-(35,  35,  35) # Helper color for background grid
-]
-
-# Define the shapes of the single parts
-tetris_shapes = [
-    [[1, 1, 1],
-     [0, 1, 0]],
-
-    [[0, 2, 2],
-     [2, 2, 0]],
-
-    [[3, 3, 0],
-     [0, 3, 3]],
-
-    [[4, 0, 0],
-     [4, 4, 4]],
-
-    [[0, 0, 5],
-     [5, 5, 5]],
-
-    [[6, 6, 6, 6]],
-
-    [[7, 7],
-     [7, 7]]
-]
-
-def rotate_clockwise(shape):
-    return [
-        [ shape[y][x] for y in range(len(shape)) ]
-        for x in range(len(shape[0]) - 1, -1, -1)
+class Tetris:
+    piece_colors = [
+        (0, 0, 0),
+        (255, 255, 0),
+        (147, 88, 254),
+        (54, 175, 144),
+        (255, 0, 0),
+        (102, 217, 238),
+        (254, 151, 32),
+        (0, 0, 255)
     ]
 
-def check_collision(board, shape, offset):
-    off_x, off_y = offset
-    for cy, row in enumerate(shape):
-        for cx, cell in enumerate(row):
-            try:
-                if cell and board[ cy + off_y ][ cx + off_x ]:
-                    return True
-            except IndexError:
-                return True
-    return False
+    pieces = [
+        [[1, 1],
+         [1, 1]],
 
-def remove_row(board, row):
-    del board[row]
-    return [[0 for i in range(cols)]] + board
+        [[0, 2, 0],
+         [2, 2, 2]],
 
-def join_matrixes(mat1, mat2, mat2_off):
-    off_x, off_y = mat2_off
-    for cy, row in enumerate(mat2):
-        for cx, val in enumerate(row):
-            mat1[cy+off_y-1 ][cx+off_x] += val
-    return mat1
+        [[0, 3, 3],
+         [3, 3, 0]],
 
-def new_board():
-    board = [
-        [ 0 for x in range(cols) ]
-        for y in range(rows)
+        [[4, 4, 0],
+         [0, 4, 4]],
+
+        [[5, 5, 5, 5]],
+
+        [[0, 0, 6],
+         [6, 6, 6]],
+
+        [[7, 0, 0],
+         [7, 7, 7]]
     ]
-    board += [[ 1 for x in range(cols)]]
-    return board
 
-class TetrisApp(object):
-    def __init__(self):
-        pygame.init()
-        pygame.key.set_repeat(250,25)
-        self.width = cell_size*(cols+6)
-        self.height = cell_size*rows
-        self.rlim = cell_size*cols
-        self.bground_grid = [[ 8 if x%2==y%2 else 0 for x in range(cols)] for y in range(rows)]
+    def __init__(self, height=20, width=10, block_size=20):
+        self.height = height
+        self.width = width
+        self.block_size = block_size
+        self.extra_board = np.ones((self.height * self.block_size, self.width * int(self.block_size / 2), 3),
+                                   dtype=np.uint8) * np.array([204, 204, 255], dtype=np.uint8)
+        self.text_color = (200, 20, 220)
+        #self.line_removed=0
+        self.reset()
 
-        self.default_font =  pygame.font.Font(
-            pygame.font.get_default_font(), 12)
+    def reset(self):
+        self.board = [[0] * self.width for _ in range(self.height)]
+        self.score = 0
+        self.tetrominoes = 0
+        self.cleared_lines = 0
+        self.bag = list(range(len(self.pieces)))
+        random.shuffle(self.bag)
+        self.ind = self.bag.pop()
+        self.piece = [row[:] for row in self.pieces[self.ind]]
+        self.current_pos = {"x": self.width // 2 - len(self.piece[0]) // 2, "y": 0}
+        #self.line_removed=0
+        self.gameover = False
+        return self.get_state_properties(self.board)
 
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.event.set_blocked(pygame.MOUSEMOTION) # We do not need
-                                                     # mouse movement
-                                                     # events, so we
-                                                     # block them.
-        self.next_stone = tetris_shapes[rand(len(tetris_shapes))]
-        self.init_game()
+    def rotate(self, piece):
+        num_rows_orig = num_cols_new = len(piece)
+        num_rows_new = len(piece[0])
+        rotated_array = []
 
-    def new_stone(self):
-        self.stone = self.next_stone[:]
-        self.next_stone = tetris_shapes[rand(len(tetris_shapes))]
-        self.stone_x = int(cols / 2 - len(self.stone[0])/2)
-        self.stone_y = 0
+        for i in range(num_rows_new):
+            new_row = [0] * num_cols_new
+            for j in range(num_cols_new):
+                new_row[j] = piece[(num_rows_orig - 1) - j][i]
+            rotated_array.append(new_row)
+        return rotated_array
 
-        if check_collision(self.board,
-                           self.stone,
-                           (self.stone_x, self.stone_y)):
+    def get_state_properties(self, board):
+        lines_cleared, board = self.check_cleared_rows(board)
+        holes = self.get_holes(board)
+        bumpiness, height = self.get_bumpiness_and_height(board)
+
+        return torch.FloatTensor([lines_cleared, holes, bumpiness, height])
+
+    def get_holes(self, board):
+        num_holes = 0
+        for col in zip(*board):
+            row = 0
+            while row < self.height and col[row] == 0:
+                row += 1
+            num_holes += len([x for x in col[row + 1:] if x == 0])
+        return num_holes
+
+    def get_bumpiness_and_height(self, board):
+        board = np.array(board)
+        mask = board != 0
+        invert_heights = np.where(mask.any(axis=0), np.argmax(mask, axis=0), self.height)
+        heights = self.height - invert_heights
+        total_height = np.sum(heights)
+        currs = heights[:-1]
+        nexts = heights[1:]
+        diffs = np.abs(currs - nexts)
+        total_bumpiness = np.sum(diffs)
+        return total_bumpiness, total_height
+
+    def get_next_states(self):
+        states = {}
+        piece_id = self.ind
+        curr_piece = [row[:] for row in self.piece]
+        if piece_id == 0:  # O piece
+            num_rotations = 1
+        elif piece_id == 2 or piece_id == 3 or piece_id == 4:
+            num_rotations = 2
+        else:
+            num_rotations = 4
+
+        for i in range(num_rotations):
+            valid_xs = self.width - len(curr_piece[0])
+            for x in range(valid_xs + 1):
+                piece = [row[:] for row in curr_piece]
+                pos = {"x": x, "y": 0}
+                while not self.check_collision(piece, pos):
+                    pos["y"] += 1
+                self.truncate(piece, pos)
+                board = self.store(piece, pos)
+                states[(x, i)] = self.get_state_properties(board)
+            curr_piece = self.rotate(curr_piece)
+        return states
+
+    def get_current_board_state(self):
+        board = [x[:] for x in self.board]
+        for y in range(len(self.piece)):
+            for x in range(len(self.piece[y])):
+                board[y + self.current_pos["y"]][x + self.current_pos["x"]] = self.piece[y][x]
+        return board
+
+    def new_piece(self):
+        if not len(self.bag):
+            self.bag = list(range(len(self.pieces)))
+            random.shuffle(self.bag)
+        self.ind = self.bag.pop()
+        self.piece = [row[:] for row in self.pieces[self.ind]]
+        self.current_pos = {"x": self.width // 2 - len(self.piece[0]) // 2,
+                            "y": 0
+                            }
+        if self.check_collision(self.piece, self.current_pos):
             self.gameover = True
 
-    def init_game(self):
-        self.board = new_board()
-        self.new_stone()
-        self.level = 1
-        self.score = 0
-        self.lines = 0
-        pygame.time.set_timer(pygame.USEREVENT+1, 1000)
-
-    def disp_msg(self, msg, topleft):
-        x,y = topleft
-        for line in msg.splitlines():
-            self.screen.blit(
-                self.default_font.render(
-                    line,
-                    False,
-                    (255,255,255),
-                    (0,0,0)),
-                (x,y))
-            y+=14
-
-    def center_msg(self, msg):
-        for i, line in enumerate(msg.splitlines()):
-            msg_image =  self.default_font.render(line, False,
-                (255,255,255), (0,0,0))
-
-            msgim_center_x, msgim_center_y = msg_image.get_size()
-            msgim_center_x //= 2
-            msgim_center_y //= 2
-
-            self.screen.blit(msg_image, (
-              self.width // 2-msgim_center_x,
-              self.height // 2-msgim_center_y+i*22))
-
-    def draw_matrix(self, matrix, offset):
-        off_x, off_y  = offset
-        for y, row in enumerate(matrix):
-            for x, val in enumerate(row):
-                if val:
-                    pygame.draw.rect(
-                        self.screen,
-                        colors[val],
-                        pygame.Rect(
-                            (off_x+x) *
-                              cell_size,
-                            (off_y+y) *
-                              cell_size,
-                            cell_size,
-                            cell_size),0)
-
-    def add_cl_lines(self, n):
-        linescores = [0, 40, 100, 300, 1200]
-        self.lines += n
-        self.score += linescores[n] * self.level
-        if self.lines >= self.level*6:
-            self.level += 1
-            newdelay = 1000-50*(self.level-1)
-            newdelay = 100 if newdelay < 100 else newdelay
-            pygame.time.set_timer(pygame.USEREVENT+1, newdelay)
-
-    def move(self, delta_x):
-        if not self.gameover and not self.paused:
-            new_x = self.stone_x + delta_x
-            if new_x < 0:
-                new_x = 0
-            if new_x > cols - len(self.stone[0]):
-                new_x = cols - len(self.stone[0])
-            if not check_collision(self.board,
-                                   self.stone,
-                                   (new_x, self.stone_y)):
-                self.stone_x = new_x
-    def quit(self):
-        self.center_msg("Exiting...")
-        pygame.display.update()
-        sys.exit()
-
-    def drop(self, manual):
-        if not self.gameover and not self.paused:
-            self.score += 1 if manual else 0
-            self.stone_y += 1
-            if check_collision(self.board,
-                               self.stone,
-                               (self.stone_x, self.stone_y)):
-                self.board = join_matrixes(
-                  self.board,
-                  self.stone,
-                  (self.stone_x, self.stone_y))
-                self.new_stone()
-                cleared_rows = 0
-                while True:
-                    for i, row in enumerate(self.board[:-1]):
-                        if 0 not in row:
-                            self.board = remove_row(
-                              self.board, i)
-                            cleared_rows += 1
-                            break
-                    else:
-                        break
-                self.add_cl_lines(cleared_rows)
-                return True
+    def check_collision(self, piece, pos):
+        future_y = pos["y"] + 1
+        for y in range(len(piece)):
+            for x in range(len(piece[y])):
+                if future_y + y > self.height - 1 or self.board[future_y + y][pos["x"] + x] and piece[y][x]:
+                    return True
         return False
 
-    def insta_drop(self):
-        if not self.gameover and not self.paused:
-            while(not self.drop(True)):
-                pass
+    def truncate(self, piece, pos):
+        gameover = False
+        last_collision_row = -1
+        for y in range(len(piece)):
+            for x in range(len(piece[y])):
+                if self.board[pos["y"] + y][pos["x"] + x] and piece[y][x]:
+                    if y > last_collision_row:
+                        last_collision_row = y
 
-    def rotate_stone(self):
-        if not self.gameover and not self.paused:
-            new_stone = rotate_clockwise(self.stone)
-            if not check_collision(self.board,
-                                   new_stone,
-                                   (self.stone_x, self.stone_y)):
-                self.stone = new_stone
+        if pos["y"] - (len(piece) - last_collision_row) < 0 and last_collision_row > -1:
+            while last_collision_row >= 0 and len(piece) > 1:
+                gameover = True
+                last_collision_row = -1
+                del piece[0]
+                for y in range(len(piece)):
+                    for x in range(len(piece[y])):
+                        if self.board[pos["y"] + y][pos["x"] + x] and piece[y][x] and y > last_collision_row:
+                            last_collision_row = y
+        return gameover
 
-    def toggle_pause(self):
-        self.paused = not self.paused
+    def store(self, piece, pos):
+        board = [x[:] for x in self.board]
+        for y in range(len(piece)):
+            for x in range(len(piece[y])):
+                if piece[y][x] and not board[y + pos["y"]][x + pos["x"]]:
+                    board[y + pos["y"]][x + pos["x"]] = piece[y][x]
+        return board
 
-    def start_game(self):
+    def check_cleared_rows(self, board):
+        to_delete = []
+        for i, row in enumerate(board[::-1]):
+            if 0 not in row:
+                to_delete.append(len(board) - 1 - i)
+        if len(to_delete) > 0:
+            board = self.remove_row(board, to_delete)
+        return len(to_delete), board
+
+    def remove_row(self, board, indices):
+        for i in indices[::-1]:
+            del board[i]
+            board = [[0 for _ in range(self.width)]] + board
+        return board
+
+    def step(self, action, render=True, video=None):
+        x, num_rotations = action
+        self.current_pos = {"x": x, "y": 0}
+        for _ in range(num_rotations):
+            self.piece = self.rotate(self.piece)
+
+        while not self.check_collision(self.piece, self.current_pos):
+            self.current_pos["y"] += 1
+            if render:
+                self.render(video)
+
+        overflow = self.truncate(self.piece, self.current_pos)
+        if overflow:
+            self.gameover = True
+
+        self.board = self.store(self.piece, self.current_pos)
+
+        lines_cleared, self.board = self.check_cleared_rows(self.board)
+        #self.line_removed+=lines_cleared
+        # if self.line_removed>=5:
+        #     self.gameover=True
+        score = 1 + (lines_cleared ** 2) * self.width
+        self.score += score
+        self.tetrominoes += 1
+        self.cleared_lines += lines_cleared
+        if self.cleared_lines>=5:
+            self.gameover = True
+        if not self.gameover:
+            self.new_piece()
         if self.gameover:
-            self.init_game()
-            self.gameover = False
+            self.score -= 2
 
-    def run(self):
-        key_actions = {
-            'ESCAPE':   self.quit,
-            'LEFT':     lambda:self.move(-1),
-            'RIGHT':    lambda:self.move(+1),
-            'DOWN':     lambda:self.drop(True),
-            'UP':       self.rotate_stone,
-            'p':        self.toggle_pause,
-            'SPACE':    self.start_game,
-            'RETURN':   self.insta_drop
-        }
+        return score, self.gameover
 
-        self.gameover = False
-        self.paused = False
+    def render(self, video=None):
+        if not self.gameover:
+            img = [self.piece_colors[p] for row in self.get_current_board_state() for p in row]
+        else:
+            img = [self.piece_colors[p] for row in self.board for p in row]
+        img = np.array(img).reshape((self.height, self.width, 3)).astype(np.uint8)
+        img = img[..., ::-1]
+        img = Image.fromarray(img, "RGB")
 
-        dont_burn_my_cpu = pygame.time.Clock()
-        while 1:
-            self.screen.fill((0,0,0))
-            if self.gameover:
-                self.center_msg("""Game Over!\nYour score: %d
-Press space to continue""" % self.score)
-            else:
-                if self.paused:
-                    self.center_msg("Paused")
-                else:
-                    pygame.draw.line(self.screen,
-                        (255,255,255),
-                        (self.rlim+1, 0),
-                        (self.rlim+1, self.height-1))
-                    self.disp_msg("Next:", (
-                        self.rlim+cell_size,
-                        2))
-                    self.disp_msg("Score: %d\n\nLevel: %d\
-\nLines: %d" % (self.score, self.level, self.lines),
-                        (self.rlim+cell_size, cell_size*5))
-                    self.draw_matrix(self.bground_grid, (0,0))
-                    self.draw_matrix(self.board, (0,0))
-                    self.draw_matrix(self.stone,
-                        (self.stone_x, self.stone_y))
-                    self.draw_matrix(self.next_stone,
-                        (cols+1,2))
-            pygame.display.update()
+        img = img.resize((self.width * self.block_size, self.height * self.block_size))
+        img = np.array(img)
+        img[[i * self.block_size for i in range(self.height)], :, :] = 0
+        img[:, [i * self.block_size for i in range(self.width)], :] = 0
 
-            for event in pygame.event.get():
-                if event.type == pygame.USEREVENT+1:
-                    self.drop(False)
-                elif event.type == pygame.QUIT:
-                    self.quit()
-                elif event.type == pygame.KEYDOWN:
-                    for key in key_actions:
-                        if event.key == eval("pygame.K_"
-                        +key):
-                            key_actions[key]()
+        img = np.concatenate((img, self.extra_board), axis=1)
 
-            dont_burn_my_cpu.tick(maxfps)
 
-if __name__ == '__main__':
-    App = TetrisApp()
-    App.run()
+        cv2.putText(img, "Score:", (self.width * self.block_size + int(self.block_size / 2), self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+        cv2.putText(img, str(self.score),
+                    (self.width * self.block_size + int(self.block_size / 2), 2 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+
+        cv2.putText(img, "Pieces:", (self.width * self.block_size + int(self.block_size / 2), 4 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+        cv2.putText(img, str(self.tetrominoes),
+                    (self.width * self.block_size + int(self.block_size / 2), 5 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+
+        cv2.putText(img, "Lines:", (self.width * self.block_size + int(self.block_size / 2), 7 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+        cv2.putText(img, str(self.cleared_lines),
+                    (self.width * self.block_size + int(self.block_size / 2), 8 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+
+        if video:
+            video.write(img)
+
+        cv2.imshow("Deep Q-Learning Tetris", img)
+        cv2.waitKey(1)
