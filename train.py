@@ -56,8 +56,8 @@ def train():
         next_state=next_states[action_index,:]
         next_action=next_actions[action_index]
         visualize=False
-        if epoch%400==0:
-            visualize=True
+        # if epoch%400==0:
+        #     visualize=True
         reward,done=env.step(next_action,render=visualize)
 
         next_state=next_state.cuda()
