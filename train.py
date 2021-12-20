@@ -5,7 +5,8 @@ from random import random, randint, sample
 import numpy as np
 import torch
 import torch.nn as nn
-
+import matplotlib.pyplot as plt
+import csv
 
 from tetris import Tetris
 from deep_q_network import DeepQNetwork
@@ -32,8 +33,8 @@ def train():
         state=state.cuda()
     num_epoch=params['params']['num_epoch']
     epoch=0
-    final_cleared_lines = 0
-    #while final_cleared_lines<128:
+    best_score=1000
+    maxed_out_log=[]
     while epoch<num_epoch:
         epsilon = params['params']['final_epsilon'] + (max(0,params['params']['num_decay_epoch']-epoch)*(params['params']['initial_epsilon']-params['params']['final_epsilon'])/params['params']['num_decay_epoch'])
         next_steps=env.get_next_states()
@@ -56,8 +57,8 @@ def train():
         next_state=next_states[action_index,:]
         next_action=next_actions[action_index]
         visualize=False
-        # if epoch%400==0:
-        #     visualize=True
+        if epoch>0 and epoch%400==0:
+            visualize=True
         reward,done=env.step(next_action,render=visualize)
 
         next_state=next_state.cuda()
@@ -106,8 +107,21 @@ def train():
             final_score,
             final_tetrominos,
             final_cleared_lines))
-        if epoch > 0 and epoch % 200== 0:
+        if final_score>best_score:
+            best_score=final_score
+            torch.save(model,"./log/tetris_best_model")
+        if final_cleared_lines>=230:
+            maxed_out_log.append([epoch,final_score])
+        if epoch > 0 and epoch % 2000== 0:
             torch.save(model, "{}/tetris_{}".format('./log', epoch))
+    print("Here are the summary for maxed-out epoches")
+    for log in maxed_out_log:
+        print("maxed out at epoch: ", log[0], "final score = ", log[1])
+    title=['epoch','score']
+    with open ('max_out_log.csv','w') as f:
+        write = csv.writer(f) 
+        write.writerow(title) 
+        write.writerows(maxed_out_log) 
 
 if __name__ == "__main__":
     train()
