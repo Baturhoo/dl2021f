@@ -1,0 +1,12 @@
+params:
+  width: 10
+  height: 20
+  block_size: 60
+  num_epoch: 20000
+  batch_size: 8192
+  max_memory: 30000
+  learning_rate: 0.001
+  initial_epsilon: 1
+  final_epsilon: 0.001
+  num_decay_epoch: 2000
+  gamma: 0.99
