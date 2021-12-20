@@ -17,6 +17,7 @@ def train():
     with open('train_config.yml','r') as config_file:
         params = yaml.safe_load(config_file)
     torch.cuda.set_device(0)
+    torch.cuda.manual_seed(123)
     env = Tetris(width=params['params']['width'], height=params['params']['height'], block_size=params['params']['block_size'])
     model = DeepQNetwork()
     optimizer = torch.optim.Adam(model.parameters(), lr=params['params']['learning_rate'])
@@ -32,9 +33,9 @@ def train():
     num_epoch=params['params']['num_epoch']
     epoch=0
     final_cleared_lines = 0
-    while final_cleared_lines<128:
-    # while epoch<num_epoch:
-        epsilon = params['params']['final_epsilon'] + (max(params['params']['num_decay_epoch']-epoch,0)*(params['params']['initial_epsilon']-params['params']['final_epsilon'])/params['params']['num_decay_epoch'])
+    #while final_cleared_lines<128:
+    while epoch<num_epoch:
+        epsilon = params['params']['final_epsilon'] + (max(0,params['params']['num_decay_epoch']-epoch)*(params['params']['initial_epsilon']-params['params']['final_epsilon'])/params['params']['num_decay_epoch'])
         next_steps=env.get_next_states()
         u=random()
         randomize_action=False
@@ -54,7 +55,10 @@ def train():
 
         next_state=next_states[action_index,:]
         next_action=next_actions[action_index]
-        reward,done=env.step(next_action,render=False)
+        visualize=False
+        if epoch%400==0:
+            visualize=True
+        reward,done=env.step(next_action,render=visualize)
 
         next_state=next_state.cuda()
         replay_memory.append([state,reward,next_state,done])
@@ -70,6 +74,8 @@ def train():
             continue
         if len(replay_memory)<=replay_memory_max_length/10:
             continue
+        while len(replay_memory)>=replay_memory_max_length:
+            del(replay_memory[0])
         batch=sample(replay_memory,min(len(replay_memory),params['params']['batch_size']))
         state_batch,reward_batch,next_state_batch,done_batch=zip(*batch)
         state_batch=torch.stack(tuple(state for state in state_batch))
