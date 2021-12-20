@@ -2,8 +2,8 @@ params:
   width: 10
   height: 20
   block_size: 60
-  num_epoch: 20000
-  batch_size: 1024
+  num_epoch: 4000
+  batch_size: 8192
   max_memory: 30000
   learning_rate: 0.001
   initial_epsilon: 1
