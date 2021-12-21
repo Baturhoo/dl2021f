@@ -3,13 +3,16 @@
 """
 import torch.nn as nn
 
-class DeepQNetwork(nn.Module):
+class DQN(nn.Module):
     def __init__(self):
-        super(DeepQNetwork, self).__init__()
-
-        self.conv1 = nn.Sequential(nn.Linear(4, 64), nn.ReLU(inplace=True))
-        self.conv2 = nn.Sequential(nn.Linear(64, 64), nn.ReLU(inplace=True))
-        self.conv3 = nn.Sequential(nn.Linear(64, 1))
+        super(DQN, self).__init__()
+        self.dqn=nn.Sequential(
+            nn.Linear(4, 64,bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(64,64,bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(64,1,bias=True)
+        )
 
         self._create_weights()
 
@@ -20,8 +23,5 @@ class DeepQNetwork(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-
+        x = self.dqn(x)
         return x

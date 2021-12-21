@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import csv
 
 from tetris import Tetris
-from deep_q_network import DeepQNetwork
+from deep_q_network import DQN
 
 
 
@@ -20,7 +20,7 @@ def train():
     torch.cuda.set_device(0)
     torch.cuda.manual_seed(123)
     env = Tetris(width=params['params']['width'], height=params['params']['height'], block_size=params['params']['block_size'])
-    model = DeepQNetwork()
+    model = DQN()
     optimizer = torch.optim.Adam(model.parameters(), lr=params['params']['learning_rate'])
     criterion = nn.MSELoss()
     replay_memory=[]
@@ -60,7 +60,6 @@ def train():
         if epoch>0 and epoch%400==0:
             visualize=True
         reward,done=env.step(next_action,render=visualize)
-
         next_state=next_state.cuda()
         replay_memory.append([state,reward,next_state,done])
 

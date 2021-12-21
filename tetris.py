@@ -50,7 +50,7 @@ class Tetris:
         self.width = width
         self.block_size = block_size
         self.extra_board = np.ones((self.height * self.block_size, self.width * int(self.block_size / 2), 3),
-                                   dtype=np.uint8) * np.array([204, 204, 255], dtype=np.uint8)
+                                   dtype=np.uint8) * np.array([30, 30, 30], dtype=np.uint8)
         self.text_color = (200, 20, 220)
         #self.line_removed=0
         self.reset()
@@ -251,26 +251,12 @@ class Tetris:
         img[[i * self.block_size for i in range(self.height)], :, :] = 0
         img[:, [i * self.block_size for i in range(self.width)], :] = 0
 
-        img = np.concatenate((img, self.extra_board), axis=1)
+        img = np.concatenate(( self.extra_board,img), axis=1)
 
 
-        cv2.putText(img, "Score:", (self.width * self.block_size + int(self.block_size / 2), self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
         cv2.putText(img, str(self.score),
-                    (self.width * self.block_size + int(self.block_size / 2), 2 * self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
-
-        cv2.putText(img, "Pieces:", (self.width * self.block_size + int(self.block_size / 2), 4 * self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
-        cv2.putText(img, str(self.tetrominoes),
-                    (self.width * self.block_size + int(self.block_size / 2), 5 * self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
-
-        cv2.putText(img, "Lines:", (self.width * self.block_size + int(self.block_size / 2), 7 * self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
-        cv2.putText(img, str(self.cleared_lines),
-                    (self.width * self.block_size + int(self.block_size / 2), 8 * self.block_size),
-                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
+                    (int(self.block_size / 2), 2 * self.block_size),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.5, color=self.text_color)
 
         if video:
             video.write(img)
